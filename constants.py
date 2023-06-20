@@ -1,0 +1,5 @@
+BASE_DIR = "D:\\Task Force\\"
+IN_DIR = BASE_DIR + "Source Data\\"
+OUT_DIR = BASE_DIR + "Inputs\\"
+LOG_DIR = BASE_DIR + "Logs\\"
+REF_DIR = BASE_DIR + "Inputs\\"
