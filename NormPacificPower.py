@@ -2,18 +2,7 @@ import csv
 import datetime
 import os
 import constants
-
-
-# Return a string describing the range between low_ym and high_ym, where each is a string
-# in the format YYYYMM, with YYYY being the year and MM the month number
-# If low_ym and high_ym are the same value, just return string describing low_ym
-def comp_mon_range(low_ym, high_ym):
-    low = low_ym[0:4] + " " + low_ym[4:6]
-    if low_ym == high_ym:
-        return low
-    else:
-        return low + " to " + high_ym[0:4] + " " + high_ym[4:6]
-
+import common
 
 now = datetime.datetime.now()
 fnamenow = now.strftime("%Y-%m-%d T %H%M%S")
@@ -97,7 +86,8 @@ with open(logfname, mode="w") as log_file:
             log_file.write("The following meters have no description entries (new meters):" + nl)
             for meter_key in noMeter:
                 log_file.write(meter_key + " has " + str(noMeter[meter_key]) + " data file entries" + nl)
-        target_out = out_dir + "\\" + constants.PACIFIC_POWER + " " + comp_mon_range(low_yearmonth, high_yearmonth) + ".csv"
+        target_out = out_dir + "\\" + constants.PACIFIC_POWER + " " + \
+                     common.comp_mon_range(low_yearmonth, high_yearmonth) + ".csv"
         os.rename(out_fname, target_out)
         log_file.write("Renamed temporary file to " + target_out + nl)
         log_file.write("Remember to move data file to archive folder to avoid duplicates!" + nl)
