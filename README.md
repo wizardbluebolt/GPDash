@@ -40,7 +40,7 @@ Matt Rosen [@wizardbluebolt]
 ## Version History
 
 * 0.1
-    * Initial Release
+    * In development
 
 ## License
 
