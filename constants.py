@@ -10,10 +10,12 @@ PACIFIC_POWER = "PacificPower"
 AVISTA = "Avista"
 PACIFIC_PRIDE = "PacificPride"
 SOLID_WASTE = "SolidWaste"
+CALC_EMISSIONS = "CalculateEmissions"
 
 AVISTA_MASTER = REF_DIR + "AvistaMaster.csv"
 PACIFIC_POWER_MASTER = REF_DIR + "PacificPowerMaster.csv"
 VEHICLES_MASTER = REF_DIR + "VehiclesMaster.csv"
+DASHBOARD_DATA = DASHBOARD_DIR + "DashboardData.csv"
 
 DIESEL_CONSTANTS = REF_DIR + "DieselConstants.csv"
 GASOLINE_CONSTANTS = REF_DIR + "GasolineConstants.csv"
@@ -22,6 +24,8 @@ EMPLOYEE_COMMUTE_CONSTANTS = REF_DIR + "EmployeeCommuteConstants.csv"
 FOREST_SEQ_CONSTANTS = REF_DIR + "ForestSequestrationConstants.csv"
 SOLID_WASTE_CONSTANTS = REF_DIR + "SolidWasteConstants.csv"
 WATER_RESTORE_CONSTANTS = REF_DIR + "WaterRestorationConstants.csv"
+
+baseline_year = 2021
 
 # Calculation Constants - The values below are HIGHLY UNLIKELY TO CHANGE!
 mwh_per_kwh = 1000      # Megawatt hours per kilowatt hour
