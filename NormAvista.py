@@ -40,13 +40,13 @@ class FileLine(object):
             self.address = taddr.strip()
 
     def check_data(self):
-        line1 = self.lineParts[0]
-        self.isDataLine = any(line1.startswith(elem) for elem in aconstants.MONTHS)
+        line1 = self.lineParts[1]
+        self.isDataLine = (len(line1) > 0) & (line1 != "Days")
         if self.isDataLine:
-            tline = line1.split(" ")
-            tmonName = tline[0]
-            self.month = '{:02d}'.format(aconstants.MONTHS.index(tmonName) + 1)
-            self.year = tline[2]
+            tDate = self.lineParts[10].split(" ")
+            tMonth = tDate[0]
+            self.month = '{:02d}'.format(aconstants.MONTHS.index(tMonth) + 1)
+            self.year = tDate[2]
             self.days = int(self.lineParts[1])
             self.therms = float(self.lineParts[3].replace(",", ""))
             self.cost = float(self.lineParts[7].replace(",", ""))
@@ -55,7 +55,7 @@ class FileLine(object):
         line1 = self.lineParts[0]
         if not self.isDataLine:
             self.isMeterLine = True
-            self.meter = line1.split(", ")[1]
+            self.meter = "None"
 
     def set_line_parts(self, parts):
         self.lineParts = parts

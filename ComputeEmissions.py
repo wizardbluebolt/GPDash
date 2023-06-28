@@ -5,6 +5,7 @@ import datetime
 import os
 import constants
 import common
+import avistaconstants
 
 nl = "\n"
 elecCO2Lookup = dict()
@@ -64,13 +65,45 @@ def elect_emissions(log_file):
     return elecResult
 
 
+def natgas_emissions(log_file):
+    log_file.write("Computing emissions for natural gas sources" + nl)
+    in_dir = constants.PERM_DIR + constants.AVISTA
+    # Concatenate all electrical data files into a single dataframe
+    col_names = ["address", "yearmonth", "days", "units", "cost"]
+    allFrame = pd.DataFrame(columns=col_names)
+    for in_fname in os.listdir(in_dir):
+        log_file.write("Reading data file " + in_fname + nl)
+        tFrame = pd.read_csv(in_dir + "\\" + in_fname)
+        allFrame = pd.concat([allFrame, tFrame], axis=0)
+    # Only keep the dataframe rows from baseline year forward
+    yearmonth_comp = constants.baseline_year * 100
+    allFrame = allFrame[allFrame['yearmonth'] > yearmonth_comp]
+    # Add columns for operation and sub-operation from master reference file
+    refFrame = pd.read_csv(constants.AVISTA_MASTER)
+    allFrame = pd.merge(allFrame, refFrame, on='address')
+    # Remove unneeded columns from dataframe
+    to_drop = ["days", "address"]
+    allFrame.drop(to_drop, axis=1, inplace=True)
+    # Convert therms to cfm (thousand cubic feet)
+    allFrame['units'] = allFrame['units'] * constants.cfm_per_therm
+    # Compute metric tons of CO2 equivalent and add as a new column to dataframe
+    allFrame['mtco2e'] = allFrame['units'] * constants.mtco2_per_cfm
+    # Consolidate rows by operation, sub-operation, and yearmonth, summing numerical columns
+    natgasResult = allFrame.groupby(['yearmonth', 'operation', 'suboperation']).sum()
+    natgasResult['source'] = "Natural Gas"
+    return natgasResult
+
+
 now = datetime.datetime.now()
 fnamenow = now.strftime("%Y-%m-%d T %H%M%S")
 logfname = constants.LOG_DIR + constants.CALC_EMISSIONS + "\\" + "Log " + fnamenow + ".txt"
 print("Processing now.  Log file " + logfname)
 with open(logfname, mode="w") as log_file:
-    elecDF = elect_emissions(log_file)
+    emitDF = elect_emissions(log_file)
     log_file.write("Electrical emissions calculation completed." + nl)
-    elecDF.to_csv(constants.DASHBOARD_DATA)
+    natgasDF = natgas_emissions(log_file)
+    log_file.write("Natural gas emissions calculation completed." + nl)
+    emitDF = pd.concat([emitDF, natgasDF], axis=0)
+    emitDF.to_csv(constants.DASHBOARD_DATA)
 print("Processing completed.")
 
