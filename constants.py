@@ -28,6 +28,10 @@ WATER_RESTORE_CONSTANTS = REF_DIR + "WaterRestorationConstants.csv"
 baseline_year = 2021
 
 # Calculation Constants - The values below are HIGHLY UNLIKELY TO CHANGE!
+gasoline = 'Gasoline'
+diesel = 'Diesel'
+electricity = 'Electricity'
+
 mwh_per_kwh = 1000      # Megawatt hours per kilowatt hour
 lb_per_mt = 2204.62     # Pounds per metric ton
 
