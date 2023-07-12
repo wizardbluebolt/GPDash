@@ -1,4 +1,7 @@
-BASE_DIR = "D:\\Task Force\\Dashboard\\Base\\"
+import base
+
+
+BASE_DIR = base.BASE_DIR
 IN_DIR = BASE_DIR + "UtilityIn\\"
 OUT_DIR = BASE_DIR + "UtilityOut\\"
 LOG_DIR = BASE_DIR + "Logs\\"

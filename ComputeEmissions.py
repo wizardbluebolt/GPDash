@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import csv
 import datetime
 import os
@@ -23,7 +24,7 @@ class VehicleMaster(object):
 
     def __init__(self, p_row):
         self.vehicle_id = p_row[0]
-        self.op_yearmonth = p_row[1]
+        self.op_yearmonth = int(p_row[1])
         self.operation = p_row[2]
         self.suboperation = p_row[3]
         self.model_year = p_row[4]
@@ -188,7 +189,7 @@ def vehicle_emissions(p_log_file):
                     cost = units * price
                     # Ignore entries before the baseline
                     if tYear >= baseline_comp:
-                        yearmonth = tYear + '{:02d}'.format(int(tDateParts[0]))
+                        yearmonth = int(tYear + '{:02d}'.format(int(tDateParts[0])))
                         if vehicle_id in vehicles:
                             for entry in vehicles[vehicle_id]:
                                 if entry.op_yearmonth <= yearmonth:
@@ -228,6 +229,68 @@ def vehicle_emissions(p_log_file):
     return vehicleResult
 
 
+def solid_waste_emissions(p_log_file, p_year_min, p_year_max):
+    p_log_file.write("Calculating solid waste emissions from " + str(p_year_min) +
+                     " to " + str(p_year_max) + nl)
+    swc_dict = dict()
+    sw_default_year_low = 9999
+    sw_default_year_high = 0
+    with open(constants.SOLID_WASTE_CONSTANTS) as swc_file:
+        p_log_file.write("Reading solid waste constants from " + constants.SOLID_WASTE_CONSTANTS + nl)
+        csv_reader = csv.reader(swc_file)
+        ref_in = 0
+        for row in csv_reader:
+            ref_in += 1
+            # Skip header row
+            if ref_in > 1:
+                tyear = int(row[0])
+                swc_dict.setdefault(tyear, int(row[1]))
+                if tyear < sw_default_year_low:
+                    sw_default_year_low = tyear
+                if tyear > sw_default_year_high:
+                    sw_default_year_high = tyear
+        p_log_file.write("Read " + str(ref_in) + " rows from solid waste reference file" + nl)
+    # Concatenate all solid waste data files into a single dataframe
+    column_names = ["address", "operation", "suboperation", "yearmonth", "units", "cost", "interpolated"]
+    swFrame = pd.DataFrame(columns=column_names)
+    in_dir = constants.PERM_DIR + constants.SOLID_WASTE
+    for in_fname in os.listdir(in_dir):
+        p_log_file.write("Reading data file " + in_fname + nl)
+        tframe = pd.read_csv(in_dir + "\\" + in_fname)
+        swFrame = pd.concat([swFrame, tframe], axis=0)
+    # Only keep dataframe rows from baseline year forward
+    yearmonthcomp = constants.baseline_year * 100
+    swFrame = swFrame[swFrame['yearmonth'] > yearmonthcomp]
+    # Remove unneeded columns from dataframe
+    to_drop = ["address", "interpolated"]
+    swFrame.drop(to_drop, axis=1, inplace=True)
+    # Get total cost per year in order to prorate emissions across operations
+    totFrame = swFrame.copy()
+    totFrame['year'] = totFrame['yearmonth'] // 100
+    to_drop = ["yearmonth", "operation", "suboperation", "units"]
+    totFrame.drop(to_drop, axis=1, inplace=True)
+    totFrame = totFrame.groupby(['year']).sum()
+    # Convert total cost dataframe to dictionary keyed by year for convenience
+    totDict = dict()
+    for index, row in totFrame.iterrows():
+        # Expression row.name is the year
+        totDict.setdefault(row.name, row['cost'])
+    # Compute estimated emissions value for each solid waste entry
+    for index, row in swFrame.iterrows():
+        tyear = row['yearmonth'] // 100
+        if tyear < sw_default_year_low:
+            tyear = sw_default_year_low
+        elif tyear > sw_default_year_high:
+            tyear = sw_default_year_high
+        tfactor = row['cost'] / totDict[tyear]
+        temit = swc_dict[tyear] * tfactor
+        swFrame.loc[index, 'mtco2e'] = temit
+        swFrame.loc[index, 'source'] = "Solid Waste"
+    # Use groupby function to create the multi-index to correspond to other sources
+    swResult = swFrame.groupby(['yearmonth', 'operation', 'suboperation', 'source']).sum()
+    return swResult
+
+
 now = datetime.datetime.now()
 fnamenow = now.strftime("%Y-%m-%d T %H%M%S")
 logfname = constants.LOG_DIR + constants.CALC_EMISSIONS + "\\" + "Log " + fnamenow + ".txt"
@@ -241,6 +304,15 @@ with open(logfname, mode="w") as log_file:
     vehDF = vehicle_emissions(log_file)
     log_file.write("Vehicle fuel emissions calculation completed." + nl)
     emitDF = pd.concat([emitDF, vehDF], axis=0)
+    yearmonths = emitDF.index.get_level_values('yearmonth')
+    monthyearmax = np.max(yearmonths)
+    yearmax = int(monthyearmax // 100)
+    monthyearmin = np.min(yearmonths)
+    yearmin = int(monthyearmin // 100)
+    swDF = solid_waste_emissions(log_file, yearmin, yearmax)
+    log_file.write("Solid waste emissions calculation completed." + nl)
+    emitDF = pd.concat([emitDF, swDF], axis=0)
     emitDF.to_csv(constants.DASHBOARD_DATA)
+
 print("Processing completed.")
 
