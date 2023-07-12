@@ -60,5 +60,4 @@ This project is licensed under the [GNU Public] License - see the LICENSE.md fil
 
 ## Acknowledgments
 
-Inspiration, code snippets, etc.
 * [Sustainable Energy Action Plan](https://www.grantspassoregon.gov/DocumentCenter/View/27647/Sustainability-and-Energy-Action-Plan)
