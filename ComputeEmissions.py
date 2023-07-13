@@ -121,7 +121,7 @@ def natgas_emissions(p_log_file):
     return natgasResult
 
 
-def vehicle_emissions(p_log_file):
+def vehicle_emissions(p_log_file, p_gasoline_factors, p_gasoline_factor_default):
     p_log_file.write("Computing emissions for vehicle sources" + nl)
     p_log_file.write("Loading vehicle master information from " + constants.VEHICLES_MASTER + nl)
     master_count = 0
@@ -142,32 +142,7 @@ def vehicle_emissions(p_log_file):
     for entry in vehicles.values():
         entry.sort(key=vehicle_sort_key, reverse=True)
     p_log_file.write("Completed loading " + str(master_count - 1) + " vehicle master entries." + nl)
-    gasoline_factors = dict()
-    highest_year = ""
-    with open(constants.GASOLINE_CONSTANTS, mode="r") as gasoline_file:
-        csv_reader = csv.reader(gasoline_file)
-        gasoline_count = 0
-        for row in csv_reader:
-            gasoline_count += 1
-            if gasoline_count > 1:
-                if row[0] > highest_year:
-                    highest_year = row[0]
-                gasoline_factors.setdefault(row[0], float(row[1]))
-    gasoline_factor_default = gasoline_factors[highest_year]
-    p_log_file.write("Completed loading " + str(gasoline_count - 1) + " gasoline conversion factors" + nl)
-    diesel_factors = dict()
-    highest_year = ""
-    with open(constants.DIESEL_CONSTANTS, mode="r") as diesel_file:
-        csv_reader = csv.reader(diesel_file)
-        diesel_count = 0
-        for row in csv_reader:
-            diesel_count += 1
-            if diesel_count > 1:
-                if row[0] > highest_year:
-                    highest_year = row[0]
-                diesel_factors.setdefault(row[0], float(row[1]))
-    diesel_factor_default = diesel_factors[highest_year]
-    p_log_file.write("Completed loading " + str(diesel_count - 1) + " diesel conversion factors" + nl)
+    diesel_factor_default, diesel_factors = load_diesel_factors(p_log_file)
     column_names = ["yearmonth", "operation", "suboperation", "units", "cost", "mtco2e", "source"]
     vehFrame = pd.DataFrame(columns=column_names)
     in_dir = constants.PERM_DIR + constants.PACIFIC_PRIDE
@@ -197,10 +172,10 @@ def vehicle_emissions(p_log_file):
                                     break
                             if vme.fuel_type == constants.gasoline:
                                 source = constants.gasoline
-                                if tYear in gasoline_factors:
-                                    factor = gasoline_factors[tYear]
+                                if tYear in p_gasoline_factors:
+                                    factor = p_gasoline_factors[tYear]
                                 else:
-                                    factor = gasoline_factor_default
+                                    factor = p_gasoline_factor_default
                             elif vme.fuel_type == constants.diesel:
                                 source = constants.diesel
                                 if tYear in diesel_factors:
@@ -227,6 +202,40 @@ def vehicle_emissions(p_log_file):
                                            ".  Entry skipped" + nl)
     vehicleResult = vehFrame.groupby(['yearmonth', 'operation', 'suboperation', 'source']).sum()
     return vehicleResult
+
+
+def load_diesel_factors(p_log_file):
+    diesel_factors = dict()
+    highest_year = ""
+    with open(constants.DIESEL_CONSTANTS, mode="r") as diesel_file:
+        csv_reader = csv.reader(diesel_file)
+        diesel_count = 0
+        for row in csv_reader:
+            diesel_count += 1
+            if diesel_count > 1:
+                if row[0] > highest_year:
+                    highest_year = row[0]
+                diesel_factors.setdefault(row[0], float(row[1]))
+    diesel_factor_default = diesel_factors[highest_year]
+    p_log_file.write("Completed loading " + str(diesel_count - 1) + " diesel conversion factors" + nl)
+    return diesel_factor_default, diesel_factors
+
+
+def load_gasoline_factors(p_log_file):
+    gasoline_factors = dict()
+    highest_year = ""
+    with open(constants.GASOLINE_CONSTANTS, mode="r") as gasoline_file:
+        csv_reader = csv.reader(gasoline_file)
+        gasoline_count = 0
+        for row in csv_reader:
+            gasoline_count += 1
+            if gasoline_count > 1:
+                if row[0] > highest_year:
+                    highest_year = row[0]
+                gasoline_factors.setdefault(row[0], float(row[1]))
+    gasoline_factor_default = gasoline_factors[highest_year]
+    p_log_file.write("Completed loading " + str(gasoline_count - 1) + " gasoline conversion factors" + nl)
+    return gasoline_factor_default, gasoline_factors
 
 
 def solid_waste_emissions(p_log_file, p_year_min, p_year_max):
@@ -291,6 +300,63 @@ def solid_waste_emissions(p_log_file, p_year_min, p_year_max):
     return swResult
 
 
+def emp_commute_emissions(p_log_file, p_year_min, p_year_max, p_gasoline_factors, p_default_gasoline_factor):
+    p_log_file.write("Computing emissions for employee commute." + nl)
+    ec_fname = constants.EMPLOYEE_COMMUTE_CONSTANTS
+    p_log_file.write("Loading employee commute constants from " + ec_fname + nl)
+    ec_dict = dict()
+    with open(ec_fname) as ec_file:
+        csv_reader = csv.reader(ec_file)
+        ref_count = 0
+        highest_year = 0
+        for row in csv_reader:
+            ref_count += 1
+            # Skip header row
+            if ref_count > 1:
+                t_year = int(row[0])
+                t_emps = float(row[1])
+                t_trips = float(row[2])
+                t_miles = float(row[3])
+                t_workdays = float(row[4])
+                t_mpg = float(row[5])
+                t_params = {'employees': t_emps,
+                            'trips_per_day': t_trips,
+                            'miles_per_trip': t_miles,
+                            'workdays_per_year': t_workdays,
+                            'miles_per_gallon': t_mpg}
+                ec_dict.setdefault(t_year, t_params)
+                if t_year > highest_year:
+                    highest_year = t_year
+    p_log_file.write("Read " + str(ref_count) + " rows from constants file." + nl)
+    col_names = ['yearmonth', 'operation', 'suboperation', 'units', 'cost', 'mtco2e', 'source']
+    ec_frame = pd.DataFrame(columns=col_names)
+    for t_year in range(p_year_min, p_year_max + 1):
+        if t_year in ec_dict:
+            t_entry = ec_dict[t_year]
+        else:
+            t_entry = ec_dict[highest_year]
+        t_gallons = (t_entry['employees'] *
+                     t_entry['trips_per_day'] *
+                     t_entry['miles_per_trip'] *
+                     t_entry['workdays_per_year']) / t_entry['miles_per_gallon']
+        if t_year in p_gasoline_factors:
+            t_factor = p_gasoline_factors[t_year]
+        else:
+            t_factor = p_default_gasoline_factor
+        t_mtco2e = (t_gallons * t_factor) / constants.kg_per_mt
+        t_frame = pd.DataFrame({'yearmonth': [(t_year * 100)],
+                                'operation': ['Employee Commute'],
+                                'suboperation': ['Main'],
+                                'units': [t_gallons],
+                                'cost': [0.0],
+                                'mtco2e': [t_mtco2e],
+                                'source': [constants.gasoline]})
+        ec_frame = pd.concat([ec_frame, t_frame])
+    # Group the resulting dataframe so that the multi-index matches that from other emissions
+    ecResult = ec_frame.groupby(['yearmonth', 'operation', 'suboperation', 'source']).sum()
+    return ecResult
+
+
 now = datetime.datetime.now()
 fnamenow = now.strftime("%Y-%m-%d T %H%M%S")
 logfname = constants.LOG_DIR + constants.CALC_EMISSIONS + "\\" + "Log " + fnamenow + ".txt"
@@ -301,7 +367,8 @@ with open(logfname, mode="w") as log_file:
     natgasDF = natgas_emissions(log_file)
     log_file.write("Natural gas emissions calculation completed." + nl)
     emitDF = pd.concat([emitDF, natgasDF], axis=0)
-    vehDF = vehicle_emissions(log_file)
+    gasoline_factor_default, gasoline_factors = load_gasoline_factors(log_file)
+    vehDF = vehicle_emissions(log_file, gasoline_factors, gasoline_factor_default)
     log_file.write("Vehicle fuel emissions calculation completed." + nl)
     emitDF = pd.concat([emitDF, vehDF], axis=0)
     yearmonths = emitDF.index.get_level_values('yearmonth')
@@ -312,6 +379,9 @@ with open(logfname, mode="w") as log_file:
     swDF = solid_waste_emissions(log_file, yearmin, yearmax)
     log_file.write("Solid waste emissions calculation completed." + nl)
     emitDF = pd.concat([emitDF, swDF], axis=0)
+    ecDF = emp_commute_emissions(log_file, yearmin, yearmax, gasoline_factors, gasoline_factor_default)
+    log_file.write("Employee commute emissions calculation completed." + nl)
+    emitDF = pd.concat([emitDF, ecDF], axis=0)
     emitDF.to_csv(constants.DASHBOARD_DATA)
 
 print("Processing completed.")
