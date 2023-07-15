@@ -357,6 +357,58 @@ def emp_commute_emissions(p_log_file, p_year_min, p_year_max, p_gasoline_factors
     return ecResult
 
 
+def water_restore_emissions(p_log_file, p_year_min, p_year_max):
+    p_log_file.write("Calculating water restoration emissions from " + str(p_year_min) +
+                     " to " + str(p_year_max) + nl)
+    wr_dict = dict()
+    wr_default_year_low = 9999
+    wr_default_year_high = 0
+    with open(constants.WATER_RESTORE_CONSTANTS) as wr_file:
+        p_log_file.write("Reading water restoration constants from " +
+                         constants.WATER_RESTORE_CONSTANTS + nl)
+        csv_reader = csv.reader(wr_file)
+        ref_in = 0
+        for row in csv_reader:
+            ref_in += 1
+            # Skip header row
+            if ref_in > 1:
+                tyear = int(row[0])
+                tfactor = {'gasft3perday': float(row[1]),
+                           'ch4portion': float(row[2])}
+                wr_dict.setdefault(tyear, tfactor)
+                if tyear < wr_default_year_low:
+                    wr_default_year_low = tyear
+                if tyear > wr_default_year_high:
+                    wr_default_year_high = tyear
+        p_log_file.write("Read " + str(ref_in) + " rows from water restoration reference file." + nl)
+    col_names = ['yearmonth', 'operation', 'suboperation', 'units', 'cost', 'mtco2e', 'source']
+    wr_frame = pd.DataFrame(columns=col_names)
+    for t_year in range(p_year_min, p_year_max + 1):
+        if t_year < wr_default_year_low:
+            t_key = wr_default_year_low
+        elif t_year > wr_default_year_high:
+            t_key = wr_default_year_high
+        else:
+            t_key = t_year
+        t_factor = wr_dict[t_key]
+        t_mtco2e = t_factor['gasft3perday'] * t_factor['ch4portion'] * \
+                    constants.digester_ch4_density * \
+                    constants.digester_ch4_destruct * \
+                    constants.m3_per_ft3 * constants.days_per_year * \
+                    constants.mt_per_gram * constants.ch4_gwp
+        t_frame = pd.DataFrame({'yearmonth': [(t_year * 100)],
+                                'operation': ['Water Restoration'],
+                                'suboperation': ['Main'],
+                                'units': [0],
+                                'cost': [0],
+                                'mtco2e': [t_mtco2e],
+                                'source': ['WR Process']})
+        wr_frame = pd.concat([wr_frame, t_frame])
+    # Group the resulting dataframe so that the multi-index matches that from other emissions
+    wrResult = wr_frame.groupby(['yearmonth', 'operation', 'suboperation', 'source']).sum()
+    return wrResult
+
+
 now = datetime.datetime.now()
 fnamenow = now.strftime("%Y-%m-%d T %H%M%S")
 logfname = constants.LOG_DIR + constants.CALC_EMISSIONS + "\\" + "Log " + fnamenow + ".txt"
@@ -382,6 +434,9 @@ with open(logfname, mode="w") as log_file:
     ecDF = emp_commute_emissions(log_file, yearmin, yearmax, gasoline_factors, gasoline_factor_default)
     log_file.write("Employee commute emissions calculation completed." + nl)
     emitDF = pd.concat([emitDF, ecDF], axis=0)
+    wrDF = water_restore_emissions(log_file, yearmin, yearmax)
+    log_file.write("Water restoration emissions calculation completed." + nl)
+    emitDF = pd.concat([emitDF, wrDF], axis=0)
     emitDF.to_csv(constants.DASHBOARD_DATA)
 
 print("Processing completed.")
