@@ -5,7 +5,6 @@ import datetime
 import os
 import constants
 
-
 nl = "\n"
 elecCO2Lookup = dict()
 elecCO2Default = 0.0
@@ -187,19 +186,19 @@ def vehicle_emissions(p_log_file, p_gasoline_factors, p_gasoline_factor_default)
                                 factor = 0.0
                             else:
                                 p_log_file.write("Error: Unknown fuel type for vehicle " + vehicle_id +
-                                               ".  Entry skipped" + nl)
+                                                 ".  Entry skipped" + nl)
                                 continue
                             tEvent = pd.DataFrame({'yearmonth': [yearmonth],
-                                      'operation': [vme.operation],
-                                      'suboperation': [vme.suboperation],
-                                      'units': [units],
-                                      'cost': [cost],
-                                      'mtco2e': [(units * factor) / constants.kg_per_mt],
-                                      'source': [source]})
+                                                   'operation': [vme.operation],
+                                                   'suboperation': [vme.suboperation],
+                                                   'units': [units],
+                                                   'cost': [cost],
+                                                   'mtco2e': [(units * factor) / constants.kg_per_mt],
+                                                   'source': [source]})
                             vehFrame = pd.concat([vehFrame, tEvent])
                         else:
                             p_log_file.write("Error: Missing master entry for vehicle: " + vehicle_id +
-                                           ".  Entry skipped" + nl)
+                                             ".  Entry skipped" + nl)
     vehicleResult = vehFrame.groupby(['yearmonth', 'operation', 'suboperation', 'source']).sum()
     return vehicleResult
 
@@ -392,10 +391,10 @@ def water_restore_emissions(p_log_file, p_year_min, p_year_max):
             t_key = t_year
         t_factor = wr_dict[t_key]
         t_mtco2e = t_factor['gasft3perday'] * t_factor['ch4portion'] * \
-                    constants.digester_ch4_density * \
-                    constants.digester_ch4_destruct * \
-                    constants.m3_per_ft3 * constants.days_per_year * \
-                    constants.mt_per_gram * constants.ch4_gwp
+                   constants.digester_ch4_density * \
+                   constants.digester_ch4_destruct * \
+                   constants.m3_per_ft3 * constants.days_per_year * \
+                   constants.mt_per_gram * constants.ch4_gwp
         t_frame = pd.DataFrame({'yearmonth': [(t_year * 100)],
                                 'operation': ['Water Restoration'],
                                 'suboperation': ['Main'],
@@ -407,6 +406,57 @@ def water_restore_emissions(p_log_file, p_year_min, p_year_max):
     # Group the resulting dataframe so that the multi-index matches that from other emissions
     wrResult = wr_frame.groupby(['yearmonth', 'operation', 'suboperation', 'source']).sum()
     return wrResult
+
+
+def forest_seq_emissions(p_log_file, p_year_min, p_year_max):
+    p_log_file.write("Calculating forest sequestration from " + str(p_year_min) +
+                     " to " + str(p_year_max) + nl)
+    fs_dict = dict()
+    fs_default_year_low = 9999
+    fs_default_year_high = 0
+    with open(constants.FOREST_SEQ_CONSTANTS) as fs_file:
+        p_log_file.write("Reading forest sequestration constants from " +
+                         constants.FOREST_SEQ_CONSTANTS + nl)
+        csv_reader = csv.reader(fs_file)
+        ref_in = 0
+        for row in csv_reader:
+            ref_in += 1
+            # Skip header row
+            if ref_in > 1:
+                tyear = int(row[0])
+                tfactor = {'areasquarekm': float(row[1]),
+                           'treeratio': float(row[2])}
+                fs_dict.setdefault(tyear, tfactor)
+                if tyear < fs_default_year_low:
+                    fs_default_year_low = tyear
+                if tyear > fs_default_year_high:
+                    fs_default_year_high = tyear
+        p_log_file.write("Read " + str(ref_in) + " rows from forest sequestration reference file." + nl)
+    col_names = ['yearmonth', 'operation', 'suboperation', 'units', 'cost', 'mtco2e', 'source']
+    fs_frame = pd.DataFrame(columns=col_names)
+    for t_year in range(p_year_min, p_year_max + 1):
+        if t_year < fs_default_year_low:
+            t_key = fs_default_year_low
+        elif t_year > fs_default_year_high:
+            t_key = fs_default_year_high
+        else:
+            t_key = t_year
+        t_factor = fs_dict[t_key]
+        t_mtco2e = (t_factor['areasquarekm'] * t_factor['treeratio'] *
+                    constants.forest_seq_factor *
+                    constants.hectare_per_km2) * \
+                   (constants.aw_co2 / constants.aw_c)
+        t_frame = pd.DataFrame({'yearmonth': [(t_year * 100)],
+                                'operation': ['Urban Forest'],
+                                'suboperation': ['Main'],
+                                'units': [0],
+                                'cost': [0],
+                                'mtco2e': [t_mtco2e],
+                                'source': ['Sequestration']})
+        fs_frame = pd.concat([fs_frame, t_frame])
+    # Group the resulting dataframe so that the multi-index matches that from other emissions
+    fsResult = fs_frame.groupby(['yearmonth', 'operation', 'suboperation', 'source']).sum()
+    return fsResult
 
 
 now = datetime.datetime.now()
@@ -437,7 +487,9 @@ with open(logfname, mode="w") as log_file:
     wrDF = water_restore_emissions(log_file, yearmin, yearmax)
     log_file.write("Water restoration emissions calculation completed." + nl)
     emitDF = pd.concat([emitDF, wrDF], axis=0)
+    fsDF = forest_seq_emissions(log_file, yearmin, yearmax)
+    log_file.write("Forest sequestration calculations completed." + nl)
+    emitDF = pd.concat([emitDF, fsDF], axis=0)
     emitDF.to_csv(constants.DASHBOARD_DATA)
 
 print("Processing completed.")
-
