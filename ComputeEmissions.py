@@ -284,18 +284,26 @@ def solid_waste_emissions(p_log_file, p_year_min, p_year_max):
         # Expression row.name is the year
         totDict.setdefault(row.name, row['cost'])
     # Compute estimated emissions value for each solid waste entry
-    for index, row in swFrame.iterrows():
-        tyear = row['yearmonth'] // 100
+    newFrame = pd.DataFrame(columns=["yearmonth", "operation", "suboperation", "units", "cost", "mtco2e", "source"])
+    for row in swFrame.itertuples():
+        tyear = getattr(row, 'yearmonth') // 100
         if tyear < sw_default_year_low:
             tyear = sw_default_year_low
         elif tyear > sw_default_year_high:
             tyear = sw_default_year_high
-        tfactor = row['cost'] / totDict[tyear]
+        tfactor = getattr(row, 'cost') / totDict[tyear]
         temit = swc_dict[tyear] * tfactor
-        swFrame.loc[index, 'mtco2e'] = temit
-        swFrame.loc[index, 'source'] = "Solid Waste"
+        tentry = {'yearmonth': [getattr(row, 'yearmonth')],
+                  'operation': [getattr(row, 'operation')],
+                  'suboperation': [getattr(row, 'suboperation')],
+                  'units': [getattr(row, 'units')],
+                  'cost': [getattr(row, 'cost')],
+                  'mtco2e': [temit],
+                  'source': ["Solid Waste"]
+                  }
+        newFrame = pd.concat([newFrame, pd.DataFrame(tentry)])
     # Use groupby function to create the multi-index to correspond to other sources
-    swResult = swFrame.groupby(['yearmonth', 'operation', 'suboperation', 'source']).sum()
+    swResult = newFrame.groupby(['yearmonth', 'operation', 'suboperation', 'source']).sum()
     return swResult
 
 
