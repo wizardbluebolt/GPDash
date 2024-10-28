@@ -22,7 +22,7 @@ class VehicleMaster(object):
     fuel_type = ""
 
     def __init__(self, p_row):
-        self.vehicle_id = p_row[0]
+        self.vehicle_id = p_row[0].replace("-", "")
         self.op_yearmonth = int(p_row[1])
         self.operation = p_row[2]
         self.suboperation = p_row[3]
@@ -155,7 +155,7 @@ def vehicle_emissions(p_log_file, p_gasoline_factors, p_gasoline_factor_default)
                 in_count += 1
                 # Skip heading row
                 if in_count > 1:
-                    vehicle_id = row[0]
+                    vehicle_id = row[0].replace("-", "")
                     tDateParts = row[1].split("/")
                     tYear = tDateParts[2]
                     units = float(row[2])

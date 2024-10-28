@@ -18,7 +18,8 @@ with open(logfname, mode="w") as log_file:
         for row in csv_reader:
             ref_in += 1
             if ref_in > 1:
-                vehicles.setdefault(row[0], 0)
+                trow = row[0]
+                vehicles.setdefault(trow.replace("-", ""), 0)
     log_file.write("Read " + str(ref_in) + " rows from vehicle master file." + nl)
     in_dir = constants.IN_DIR + constants.PACIFIC_PRIDE
     out_dir = constants.OUT_DIR + constants.PACIFIC_PRIDE
@@ -39,8 +40,8 @@ with open(logfname, mode="w") as log_file:
                 for row in csv_reader:
                     in_count += 1
                     # Skip header row, and blank rows or grand total row if present
-                    if (in_count > 1) & (row[0] != "") & (row[0] != "Grand Total"):
-                        vehicle_id = row[0].strip()
+                    if (in_count > 1) & (row[0] != "") & (row[1] != "") & (row[0] != "Grand Total"):
+                        vehicle_id = row[0].strip().replace("-", "")
                         fuel_date = datetime.datetime.strptime(row[1], "%m/%d/%Y")
                         yearmonth = str(fuel_date.year) + '{:02d}'.format(fuel_date.month)
                         fuel_date = fuel_date.strftime("%m/%d/%Y")
